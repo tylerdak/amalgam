@@ -49,7 +49,7 @@ export default function amalgam(options = {}) {
    * Extract <script setup> content from blade file (only first one)
    */
   function extractScriptSetup(content) {
-    const scriptSetupRegex = /<script\s[^>]*\bsetup\b[^>]*>([\s\S]*?)<\/script>/i;
+    const scriptSetupRegex = /<script\s[^>]*\beditor\b[^>]*>([\s\S]*?)<\/script>/i;
     const match = scriptSetupRegex.exec(content);
 
     return match ? match[1].trim() : null;
