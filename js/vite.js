@@ -2,18 +2,18 @@ import { readFileSync, readdirSync, existsSync } from 'fs';
 import { resolve, join, relative } from 'path';
 import { normalizePath } from 'vite';
 
-export default function bond(options = {}) {
+export default function amalgam(options = {}) {
   const {
     viewsPath = 'resources/views',
     watchFiles = true,
   } = options;
 
   let server;
-  const virtualModuleId = 'virtual:bond';
+  const virtualModuleId = 'virtual:amalgam';
   const resolvedVirtualModuleId = '\0' + virtualModuleId;
 
   /**
-   * Find all .blade.php files recursively  
+   * Find all .blade.php files recursively
    */
   function findBladeFiles(dir) {
     if (!existsSync(dir)) {
@@ -21,14 +21,14 @@ export default function bond(options = {}) {
     }
 
     const files = [];
-    
+
     function traverse(currentDir) {
       try {
         const items = readdirSync(currentDir, { withFileTypes: true });
-        
+
         for (const item of items) {
           const fullPath = join(currentDir, item.name);
-          
+
           if (item.isDirectory()) {
             traverse(fullPath);
           } else if (item.name.endsWith('.blade.php')) {
@@ -36,10 +36,10 @@ export default function bond(options = {}) {
           }
         }
       } catch (error) {
-        console.warn(`[bond] Cannot read directory ${currentDir}:`, error.message);
+        console.warn(`[amalgam] Cannot read directory ${currentDir}:`, error.message);
       }
     }
-    
+
     traverse(dir);
     return files;
   }
@@ -51,7 +51,7 @@ export default function bond(options = {}) {
   function extractScriptSetup(content) {
     const scriptSetupRegex = /<script\s[^>]*\bsetup\b[^>]*>([\s\S]*?)<\/script>/i;
     const match = scriptSetupRegex.exec(content);
-    
+
     return match ? match[1].trim() : null;
   }
 
@@ -80,9 +80,9 @@ export default function bond(options = {}) {
 
     let modified = ''
 
-    modified += "import { mount } from 'bond';\n\n"
+    modified += "import { mount } from 'amalgam';\n\n"
     modified += code.replace('mount(', `mount("${componentName}", ${props}, `)
-    
+
     return modified
   }
 
@@ -98,7 +98,7 @@ export default function bond(options = {}) {
    * Check if this is a blade script request
    */
   function isBladeScriptRequest(id) {
-    return id.includes('?bond');
+    return id.includes('?amalgam');
   }
 
 
@@ -112,17 +112,17 @@ export default function bond(options = {}) {
       if (virtualModule) {
         server.reloadModule(virtualModule);
       }
-      
-      // Find and invalidate the corresponding virtual .ts?bond module
+
+      // Find and invalidate the corresponding virtual .ts?amalgam module
       const relativePath = relative(process.cwd(), filePath);
       const cleanPath = normalizePath(relativePath.replace(/\.blade\.php$/, ''));
-      const virtualScriptPath = `/${cleanPath}.ts?bond`;
-      
+      const virtualScriptPath = `/${cleanPath}.ts?amalgam`;
+
       const scriptModule = server.moduleGraph.getModuleById(virtualScriptPath);
       if (scriptModule) {
         server.reloadModule(scriptModule);
       }
-      
+
       // Force a full reload as fallback
       server.ws.send({
         type: 'full-reload'
@@ -132,19 +132,19 @@ export default function bond(options = {}) {
 
   return {
     name: 'vite-blade-script-setup',
-    
+
     configureServer(devServer) {
       server = devServer;
-      
+
       // Setup file watching using Vite's internal watcher during dev
       if (watchFiles) {
         const bladeFiles = findBladeFiles(resolve(viewsPath));
-        
+
         for (const filePath of bladeFiles) {
           // Add each blade file to Vite's watcher
           server.watcher.add(filePath);
         }
-        
+
         // Listen to file changes
         server.watcher.on('change', (filePath) => {
           if (filePath.endsWith('.blade.php')) {
@@ -167,17 +167,17 @@ export default function bond(options = {}) {
     buildStart() {
       // During build, automatically discover and add blade files to the build
       const bladeFiles = findBladeFiles(resolve(viewsPath));
-      
+
       for (const filePath of bladeFiles) {
         try {
           const content = readFileSync(filePath, 'utf-8');
           const script = extractScriptSetup(content);
-          
+
           if (script) {
             this.addWatchFile(filePath);
           }
         } catch (error) {
-          console.warn(`[bond] Error processing ${filePath}:`, error.message);
+          console.warn(`[amalgam] Error processing ${filePath}:`, error.message);
         }
       }
     },
@@ -187,12 +187,12 @@ export default function bond(options = {}) {
       if (id === virtualModuleId) {
         return resolvedVirtualModuleId;
       }
-      
-      // Handle bond module alias
-      if (id === 'bond') {
-        return resolve(process.cwd(), join('vendor', 'ganyicz', 'bond', 'js', 'bond.js'));
+
+      // Handle amalgam module alias
+      if (id === 'amalgam') {
+        return resolve(process.cwd(), join('vendor', 'dakin', 'amalgam', 'js', 'amalgam.js'));
       }
-      
+
       // Handle blade script requests similar to Vue's approach
       if (isBladeScriptRequest(id)) {
         return id; // Return as-is, we'll handle it in load
@@ -205,54 +205,54 @@ export default function bond(options = {}) {
       if (id === resolvedVirtualModuleId) {
         const bladeFiles = findBladeFiles(resolve(viewsPath));
         const imports = [];
-        
+
         for (const filePath of bladeFiles) {
           try {
             const content = readFileSync(filePath, 'utf-8');
             const script = extractScriptSetup(content);
-            
+
             if (script) {
               // Create a .ts virtual file so Vite handles TypeScript transformation
               // Use relative path for virtual module ID, normalize to forward slashes for URLs
               const relativePath = relative(process.cwd(), filePath);
               const cleanPath = normalizePath(relativePath).replace(/\.blade\.php$/, '');
-              const virtualPath = `${cleanPath}.ts?bond`;
+              const virtualPath = `${cleanPath}.ts?amalgam`;
               imports.push(`import '/${virtualPath}';`);
             }
           } catch (error) {
-            console.warn(`[bond] Error processing ${filePath}:`, error.message);
+            console.warn(`[amalgam] Error processing ${filePath}:`, error.message);
           }
         }
-        
-        const moduleContent = imports.length > 0 
-          ? imports.join('\n') 
+
+        const moduleContent = imports.length > 0
+          ? imports.join('\n')
           : '// No blade script setup blocks found';
-        
+
         return moduleContent;
       }
-      
+
       // Handle blade script requests
       if (isBladeScriptRequest(id)) {
         const { filename } = parseBladeRequest(id);
-        
+
         try {
           // Remove the .ts extension and add back .blade.php to get the actual file
           const actualFilename = filename.replace(/\.ts$/, ".blade.php");
           const path = join(process.cwd(), actualFilename)
-          
+
           const content = readFileSync(path, 'utf-8');
           const script = extractScriptSetup(content);
-          
+
           if (script) {
             // Transform mount() calls before returning
             const transformedScript = transformMountCalls(script, actualFilename);
             return transformedScript;
           } else {
-            console.warn(`[bond] No script setup found in ${actualFilename}`);
+            console.warn(`[amalgam] No script setup found in ${actualFilename}`);
             return 'export {};'; // Empty module
           }
         } catch (error) {
-          console.error(`[bond] Error loading blade script ${filename}:`, error.message);
+          console.error(`[amalgam] Error loading blade script ${filename}:`, error.message);
           return 'export {};'; // Empty module fallback
         }
       }
@@ -266,11 +266,11 @@ export default function bond(options = {}) {
         try {
           const content = readFileSync(id, 'utf-8');
           const script = extractScriptSetup(content);
-          
+
           if (script) {
             // Generate import for the script setup block
-            const importStatement = `import /'${id}.ts?bond';`;
-            
+            const importStatement = `import /'${id}.ts?amalgam';`;
+
             // Return the import as the module content
             return {
               code: importStatement,
@@ -278,7 +278,7 @@ export default function bond(options = {}) {
             };
           }
         } catch (error) {
-          console.warn(`[bond] Error transforming blade file ${id}:`, error.message);
+          console.warn(`[amalgam] Error transforming blade file ${id}:`, error.message);
         }
       }
 

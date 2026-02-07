@@ -5,7 +5,7 @@
 
 Bond brings modern component authoring to Laravel Blade and Alpine.js. It introduces a few features inspired by React and Vue, making it easier to write structured, maintainable components. Bond also ships with a VS Code extension that adds syntax highlighting, autocomplete, and error checking.
 
-[Learn more about the project](https://github.com/ganyicz/bond/issues/3)
+[Learn more about the project](https://github.com/tylerdak/bond/issues/3)
 
 [Join the Discord server](https://discord.com/invite/wsF68edVdW)
 
@@ -14,13 +14,13 @@ Bond brings modern component authoring to Laravel Blade and Alpine.js. It introd
 Install Bond into your project using Composer:
 
 ```bash
-composer require ganyicz/bond
+composer require dakin/amalgam
 ```
 
 Next, add the following lines to your `resources/js/app.js` file. Bond will compile all scripts extracted from your Blade files here.
 
 ```js
-import '../../vendor/ganyicz/bond/js/alpine';
+import '../../vendor/dakin/amalgam/js/alpine';
 import 'virtual:bond';
 ```
 
@@ -32,7 +32,7 @@ import {
 } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import tailwindcss from "@tailwindcss/vite";
-+ import bond from './vendor/ganyicz/bond/dist/vite-plugin';
++ import bond from './vendor/tylerdak/amalgam/dist/vite-plugin';
 
 export default defineConfig({
     plugins: [
@@ -63,13 +63,13 @@ If you're using Alpine.js CDN, make sure it's registered _after_ your `app.js` f
 
 If you're using Livewire, you don't need to worry about this, as Livewire automatically loads Alpine.js for you. Just make sure your `app.js` file is registered somwhere in the `<head>` tag.
 
-## VS Code Extension
+<!-- ## VS Code Extension -->
 
-For the best development experience, install the [Bond VS Code extension](https://marketplace.visualstudio.com/items?itemName=ganyicz.bond-vscode-extension). It provides syntax highlighting, autocomplete, and error checking for both Bond components and Alpine.js attributes. The extension will be open-sourced in a future release.
+<!-- For the best development experience, install the [Bond VS Code extension](https://marketplace.visualstudio.com/items?itemName=ganyicz.bond-vscode-extension). It provides syntax highlighting, autocomplete, and error checking for both Bond components and Alpine.js attributes. The extension will be open-sourced in a future release. -->
 
-Make sure to also install the official [Laravel extension](https://marketplace.visualstudio.com/items?itemName=laravel.vscode-laravel).
+<!-- Make sure to also install the official [Laravel extension](https://marketplace.visualstudio.com/items?itemName=laravel.vscode-laravel). -->
 
-Bond will only load in files with language mode set to `Blade`.
+<!-- Bond will only load in files with language mode set to `Blade`. -->
 
 ## Quick guide
 

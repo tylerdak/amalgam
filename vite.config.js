@@ -4,7 +4,7 @@ export default defineConfig({
   build: {
     lib: {
       entry: 'js/vite.js',
-      name: 'BondVitePlugin',
+      name: 'AmalgamVitePlugin',
       fileName: 'vite-plugin',
       formats: ['es']
     },

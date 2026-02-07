@@ -1,6 +1,6 @@
 <?php
 
-namespace Ganyicz\Bond;
+namespace Dakin\Amalgam;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Blade;
@@ -22,43 +22,39 @@ class BondServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        if ($this->app->runningInConsole()) {
-            $this->publishes([
-                __DIR__ . '/../js/alpine.js' => public_path('vendor/alpine-bond-plugin.js'),
-            ], 'bond-assets');
-        }
+        // if ($this->app->runningInConsole()) {
+        //     $this->publishes([
+        //         __DIR__ . '/../js/alpine.js' => public_path('vendor/alpine-bond-plugin.js'),
+        //     ], 'bond-assets');
+        // }
 
-        ComponentAttributeBag::macro('map', function ($callback) {
-            /** @var ComponentAttributeBag $this */
-            return new static((new Collection($this->attributes))->map($callback)->all());
-        });
+        // SUBSTITUTING SCRIPT:SETUP
+        // Blade::prepareStringsForCompilationUsing(function ($value) {
+        //     $path = app('blade.compiler')->getPath();
 
-        Blade::prepareStringsForCompilationUsing(function ($value) {
-            $path = app('blade.compiler')->getPath();
+        //     return preg_replace_callback(
+        //         '/<script\s[^>]*\bsetup\b[^>]*>.*?<\/script>/s',
+        //         function () use ($path) {
+        //             $componentName = str($path)
+        //                 ->after(resource_path('views/'))
+        //                 ->before('.blade.php')
+        //                 ->replace('/', '.');
 
-            return preg_replace_callback(
-                '/<script\s[^>]*\bsetup\b[^>]*>.*?<\/script>/s',
-                function () use ($path) {
-                    $componentName = str($path)
-                        ->after(resource_path('views/'))
-                        ->before('.blade.php')
-                        ->replace('/', '.');
-                    
-                    return <<<BLADE
-                        @php
-                        if (class_exists(\Livewire\Livewire::class)) {
-                            \Livewire\Livewire::forceAssetInjection();
-                        }
-                        
-                        \$attributes = \$attributes
-                            ->map(fn (\$v, \$k) => \$v === true && str_starts_with(\$k, 'x-') ? '' : \$v)
-                            ->merge(['x-data' => '', 'x-component' => '{$componentName}']);
-                        @endphp
-                        BLADE
-                    ;
-                },
-                $value
-            );
-        });
+        //             return <<<BLADE
+        //                 @php
+        //                 if (class_exists(\Livewire\Livewire::class)) {
+        //                     \Livewire\Livewire::forceAssetInjection();
+        //                 }
+
+        //                 \$attributes = \$attributes
+        //                     ->map(fn (\$v, \$k) => \$v === true && str_starts_with(\$k, 'x-') ? '' : \$v)
+        //                     ->merge(['x-data' => '', 'x-component' => '{$componentName}']);
+        //                 @endphp
+        //                 BLADE
+        //             ;
+        //         },
+        //         $value
+        //     );
+        // });
     }
 }
