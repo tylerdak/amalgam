@@ -21,7 +21,7 @@ Next, add the following lines to your `resources/js/app.js` file. Bond will comp
 
 ```js
 import '../../vendor/dakin/amalgam/js/alpine';
-import 'virtual:bond';
+import 'virtual:amalgam';
 ```
 
 Finally, update your `vite.config.js` to register Bond:
@@ -32,7 +32,7 @@ import {
 } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import tailwindcss from "@tailwindcss/vite";
-+ import bond from './vendor/tylerdak/amalgam/dist/vite-plugin';
++ import amalgam from './vendor/dakin/amalgam/dist/vite-plugin';
 
 export default defineConfig({
     plugins: [
@@ -41,7 +41,7 @@ export default defineConfig({
             refresh: true,
         }),
         tailwindcss(),
-+       bond(),
++       amalgam(),
     ],
     server: {
         cors: true,
@@ -260,6 +260,71 @@ Since Bond compiles `<script setup>` tags with Vite, you can use any import supp
 The `@` alias points to `resources/js` by default. You can [customize the aliases](https://laravel.com/docs/12.x/vite#aliases) in your `vite.config.js` file, however this will not reflect in the VS Code extension at the moment and only the default alias will work in your IDE.
 
 Make sure to always import types using the `import type` syntax to avoid issues.
+
+### React Support
+
+Amalgam supports React/JSX for building WordPress Gutenberg block editor controls and other React components. To enable React compilation, add `type="react"` to your script tag:
+
+```html
+<script editor type="react">
+import { InspectorControls, PanelBody } from '@wordpress/block-editor';
+import { RangeControl } from '@wordpress/components';
+
+export default function MyBlockInspector({ attributes, setAttributes }) {
+  return (
+    <InspectorControls>
+      <PanelBody title="Settings">
+        <RangeControl
+          label="Size"
+          value={attributes.size}
+          onChange={(size) => setAttributes({ size })}
+          min={1}
+          max={10}
+        />
+      </PanelBody>
+    </InspectorControls>
+  );
+}
+</script>
+```
+
+#### Configuration
+
+To use React in your Amalgam project:
+
+1. Install the React plugin:
+```bash
+npm install --save-dev @vitejs/plugin-react
+```
+
+2. Add the React plugin **before** the amalgam plugin in your `vite.config.js`:
+
+```js
+import { defineConfig } from 'vite';
+import laravel from 'laravel-vite-plugin';
+import react from '@vitejs/plugin-react';
+import amalgam from './vendor/dakin/amalgam/dist/vite-plugin';
+
+export default defineConfig({
+  plugins: [
+    laravel({
+      input: ['resources/css/app.css', 'resources/js/app.js'],
+      refresh: true,
+    }),
+    react(), // React plugin MUST come before amalgam
+    amalgam(),
+  ],
+});
+```
+
+> **Important:** The React plugin must be configured **before** the amalgam plugin so it can process the `.tsx` virtual modules that Amalgam generates.
+
+#### React vs Alpine Scripts
+
+- **Regular scripts** (`<script editor>`): Processed as vanilla JavaScript with Alpine.js integration
+- **React scripts** (`<script editor type="react">`): Processed as JSX/TypeScript without Alpine integration
+
+React scripts are compiled to separate `.tsx` modules and don't receive the automatic `mount()` transformation that regular scripts get. You have full control over component registration and WordPress integration.
 
 ### Else statement
 

@@ -56,6 +56,62 @@ export default function amalgam(options = {}) {
   }
 
   /**
+   * Extract script tag with type attribute information
+   */
+  function extractScriptSetupWithInfo(content) {
+    const scriptSetupRegex = /<script\s([^>]*\beditor\b[^>]*)>([\s\S]*?)<\/script>/i;
+    const match = scriptSetupRegex.exec(content);
+
+    if (!match) return null;
+
+    const attributes = match[1];
+    const scriptContent = match[2].trim();
+
+    // Extract type attribute
+    const typeMatch = attributes.match(/type\s*=\s*["']([^"']+)["']/i);
+    const isReact = typeMatch && typeMatch[1] === 'jsx';
+
+    return {
+      content: scriptContent,
+      isReact: isReact
+    };
+  }
+
+  /**
+   * Check if script is React type
+   */
+  function isReactScript(scriptInfo) {
+    return scriptInfo && scriptInfo.isReact;
+  }
+
+  /**
+   * Get virtual module path based on script type
+   */
+  function getVirtualModulePath(cleanPath, isReact) {
+    return isReact ? `${cleanPath}.tsx?amalgam` : `${cleanPath}.ts?amalgam`;
+  }
+
+  /**
+   * Check if any blade files have React scripts
+   */
+  function hasReactScripts(viewsPath) {
+    const bladeFiles = findBladeFiles(resolve(viewsPath));
+
+    for (const filePath of bladeFiles) {
+      try {
+        const content = readFileSync(filePath, 'utf-8');
+        const scriptInfo = extractScriptSetupWithInfo(content);
+        if (isReactScript(scriptInfo)) {
+          return true;
+        }
+      } catch (error) {
+        // Ignore file read errors during check
+      }
+    }
+    return false;
+  }
+
+  /**
    * Generate component name from file path
    */
   function generateComponentName(viewsPath, filePath) {
@@ -80,7 +136,7 @@ export default function amalgam(options = {}) {
 
     let modified = ''
 
-    modified += "import { mount } from 'amalgam';\n\n"
+    modified += "import { mount, AdditionalEditContent } from 'amalgam';\n\n"
     modified += code.replace('mount(', `mount("${componentName}", ${props}, `)
 
     return modified
@@ -113,14 +169,22 @@ export default function amalgam(options = {}) {
         server.reloadModule(virtualModule);
       }
 
-      // Find and invalidate the corresponding virtual .ts?amalgam module
+      // Find and invalidate the corresponding virtual .ts/.tsx?amalgam modules
       const relativePath = relative(process.cwd(), filePath);
       const cleanPath = normalizePath(relativePath.replace(/\.blade\.php$/, ''));
-      const virtualScriptPath = `/${cleanPath}.ts?amalgam`;
 
-      const scriptModule = server.moduleGraph.getModuleById(virtualScriptPath);
-      if (scriptModule) {
-        server.reloadModule(scriptModule);
+      // Try both .ts and .tsx extensions
+      const virtualScriptPaths = [
+        `/${cleanPath}.ts?amalgam`,
+        `/${cleanPath}.tsx?amalgam`
+      ];
+
+      for (const virtualScriptPath of virtualScriptPaths) {
+        const scriptModule = server.moduleGraph.getModuleById(virtualScriptPath);
+        if (scriptModule) {
+          server.reloadModule(scriptModule);
+          break;
+        }
       }
 
       // Force a full reload as fallback
@@ -130,7 +194,8 @@ export default function amalgam(options = {}) {
     }
   }
 
-  return {
+    // Create the main amalgam plugin
+  const amalgamPlugin = {
     name: 'vite-blade-script-setup',
 
     configureServer(devServer) {
@@ -171,9 +236,9 @@ export default function amalgam(options = {}) {
       for (const filePath of bladeFiles) {
         try {
           const content = readFileSync(filePath, 'utf-8');
-          const script = extractScriptSetup(content);
+          const scriptInfo = extractScriptSetupWithInfo(content);
 
-          if (script) {
+          if (scriptInfo) {
             this.addWatchFile(filePath);
           }
         } catch (error) {
@@ -190,7 +255,7 @@ export default function amalgam(options = {}) {
 
       // Handle amalgam module alias
       if (id === 'amalgam') {
-        return resolve(process.cwd(), join('vendor', 'dakin', 'amalgam', 'js', 'amalgam.js'));
+        return resolve(process.cwd(), join('vendor', 'dakin', 'amalgam', 'js', 'amalgam.jsx'));
       }
 
       // Handle blade script requests similar to Vue's approach
@@ -209,14 +274,19 @@ export default function amalgam(options = {}) {
         for (const filePath of bladeFiles) {
           try {
             const content = readFileSync(filePath, 'utf-8');
-            const script = extractScriptSetup(content);
+            const scriptInfo = extractScriptSetupWithInfo(content);
 
-            if (script) {
-              // Create a .ts virtual file so Vite handles TypeScript transformation
+if (scriptInfo) {
+              // Create a .ts or .tsx virtual file so Vite handles TypeScript transformation
               // Use relative path for virtual module ID, normalize to forward slashes for URLs
               const relativePath = relative(process.cwd(), filePath);
               const cleanPath = normalizePath(relativePath).replace(/\.blade\.php$/, '');
-              const virtualPath = `${cleanPath}.ts?amalgam`;
+              const virtualPath = getVirtualModulePath(cleanPath, scriptInfo.isReact);
+
+              if (scriptInfo.isReact) {
+                console.log(`[amalgam] React script found in ${filePath}`);
+              }
+
               imports.push(`import '/${virtualPath}';`);
             }
           } catch (error) {
@@ -236,17 +306,28 @@ export default function amalgam(options = {}) {
         const { filename } = parseBladeRequest(id);
 
         try {
-          // Remove the .ts extension and add back .blade.php to get the actual file
-          const actualFilename = filename.replace(/\.ts$/, ".blade.php");
+          // Remove the .ts/.tsx extension and add back .blade.php to get the actual file
+          const actualFilename = filename.replace(/\.(ts|tsx)$/, ".blade.php");
           const path = join(process.cwd(), actualFilename)
 
           const content = readFileSync(path, 'utf-8');
-          const script = extractScriptSetup(content);
+          const scriptInfo = extractScriptSetupWithInfo(content);
 
-          if (script) {
-            // Transform mount() calls before returning
-            const transformedScript = transformMountCalls(script, actualFilename);
-            return transformedScript;
+          if (scriptInfo) {
+            // Only transform mount() calls for non-React scripts
+            if (scriptInfo.isReact) {
+              // Add helpful comment for React scripts
+              const commentedContent = `// React component from ${actualFilename}\n` + scriptInfo.content;
+              let modified = '';
+
+              modified += "import { mount, AdditionalEditContent } from 'amalgam';\n\n"
+              modified += commentedContent
+
+              return modified
+            } else {
+              const transformedScript = transformMountCalls(scriptInfo.content, actualFilename);
+              return transformedScript;
+            }
           } else {
             console.warn(`[amalgam] No script setup found in ${actualFilename}`);
             return 'export {};'; // Empty module
@@ -265,11 +346,12 @@ export default function amalgam(options = {}) {
       if (id.endsWith('.blade.php') && !isBladeScriptRequest(id)) {
         try {
           const content = readFileSync(id, 'utf-8');
-          const script = extractScriptSetup(content);
+          const scriptInfo = extractScriptSetupWithInfo(content);
 
-          if (script) {
-            // Generate import for the script setup block
-            const importStatement = `import /'${id}.ts?amalgam';`;
+          if (scriptInfo) {
+            // Determine the correct extension based on script type
+            const extension = scriptInfo.isReact ? 'tsx' : 'ts';
+            const importStatement = `import '${id}.${extension}?amalgam';`;
 
             // Return the import as the module content
             return {
@@ -285,4 +367,14 @@ export default function amalgam(options = {}) {
       return null;
     },
   };
+
+  // Check if React support is needed and inform user
+  const hasReact = hasReactScripts(viewsPath);
+  if (hasReact) {
+    console.log('[amalgam] React scripts detected. Make sure to configure @vitejs/plugin-react BEFORE amalgam in your vite.config.js');
+  }
+
+  return amalgamPlugin;
 }
+
+
