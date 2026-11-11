@@ -98,7 +98,6 @@ dist/                  # Built assets
 - React scripts use `<script editor type="react">` attribute
 - React scripts are compiled to `.tsx` virtual modules
 - Regular scripts remain as `.ts` virtual modules
-- React scripts bypasses `mount()` transformation (full user control)
 - Requires `@vitejs/plugin-react` to be installed and configured
 
 ### File Watching

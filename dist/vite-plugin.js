@@ -1,14 +1,60 @@
 import { readFileSync, existsSync, readdirSync } from "fs";
-import { resolve, relative, join } from "path";
+import { resolve, dirname, relative, join } from "path";
+import { fileURLToPath } from "node:url";
 import { normalizePath } from "vite";
 function amalgam(options = {}) {
   const {
     viewsPath = "resources/views",
-    watchFiles = true
+    watchFiles = true,
+    reactImports = []
   } = options;
+  const normalizedReactImports = normalizeReactImports(reactImports);
+  const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   let server;
   const virtualModuleId = "virtual:amalgam";
   const resolvedVirtualModuleId = "\0" + virtualModuleId;
+  function normalizeReactImports(imports) {
+    if (!Array.isArray(imports)) {
+      throw new TypeError("[amalgam] reactImports must be an array of import definitions.");
+    }
+    return imports.map((entry, index) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        throw new TypeError(`[amalgam] reactImports[${index}] must be an object.`);
+      }
+      if (typeof entry.from !== "string" || entry.from.trim() === "") {
+        throw new TypeError(`[amalgam] reactImports[${index}].from must be a non-empty module specifier.`);
+      }
+      if (!Array.isArray(entry.named)) {
+        throw new TypeError(`[amalgam] reactImports[${index}].named must be an array.`);
+      }
+      const named = entry.named.map((item, itemIndex) => {
+        const imported = typeof item === "string" ? item : item == null ? void 0 : item.imported;
+        const local = typeof item === "string" ? item : (item == null ? void 0 : item.local) ?? imported;
+        if (typeof imported !== "string" || !/^[A-Za-z_$][\w$]*$/.test(imported)) {
+          throw new TypeError(`[amalgam] reactImports[${index}].named[${itemIndex}] has an invalid imported name.`);
+        }
+        if (typeof local !== "string" || !/^[A-Za-z_$][\w$]*$/.test(local)) {
+          throw new TypeError(`[amalgam] reactImports[${index}].named[${itemIndex}] has an invalid local name.`);
+        }
+        return { imported, local };
+      });
+      return { from: entry.from, named };
+    });
+  }
+  function injectReactImports(code) {
+    const requests = normalizedReactImports;
+    const injected = /* @__PURE__ */ new Map();
+    for (const request of requests) {
+      for (const { imported, local } of request.named) {
+        if (!injected.has(request.from)) injected.set(request.from, []);
+        injected.get(request.from).push(imported === local ? imported : `${imported} as ${local}`);
+      }
+    }
+    const statements = [...injected].map(([from, names]) => `import { ${names.join(", ")} } from ${JSON.stringify(from)};`);
+    return statements.length ? `${statements.join("\n")}
+
+${code}` : code;
+  }
   function findBladeFiles(dir) {
     if (!existsSync(dir)) {
       return [];
@@ -64,23 +110,6 @@ function amalgam(options = {}) {
       }
     }
     return false;
-  }
-  function generateComponentName(viewsPath2, filePath) {
-    return filePath.slice(1).replace(viewsPath2 + "/", "").replace(/\.blade\.php$/, "").split("/").join(".");
-  }
-  function extractPropNames(code) {
-    const typeMatch = code.match(/props\s*:\s*{([^}]*)}/s);
-    if (!typeMatch) return [];
-    const propsMatch = typeMatch[1].matchAll(/["']?([a-zA-Z_$][\w$]*)["']?\s*\??:/g);
-    return [...propsMatch].map((m) => m[1]);
-  }
-  function transformMountCalls(code, filename) {
-    const componentName = generateComponentName(viewsPath, filename);
-    const props = JSON.stringify(extractPropNames(code));
-    let modified = "";
-    modified += "import { mount, AdditionalEditContent } from 'amalgam';\n\n";
-    modified += code.replace("mount(", `mount("${componentName}", ${props}, `);
-    return modified;
   }
   function parseBladeRequest(id) {
     const [filename] = id.split("?", 2);
@@ -157,8 +186,8 @@ function amalgam(options = {}) {
       if (id === virtualModuleId) {
         return resolvedVirtualModuleId;
       }
-      if (id === "amalgam") {
-        return resolve(process.cwd(), join("vendor", "dakin", "amalgam", "js", "amalgam.jsx"));
+      if (id === "amalgam" || id === "amalgam/editor") {
+        return resolve(packageRoot, "js", "amalgam.jsx");
       }
       if (isBladeScriptRequest(id)) {
         return id;
@@ -198,21 +227,17 @@ function amalgam(options = {}) {
           const scriptInfo = extractScriptSetupWithInfo(content);
           if (scriptInfo) {
             if (scriptInfo.isReact) {
-              const commentedContent = `// React component from ${actualFilename}
-` + scriptInfo.content;
-              let modified = "";
-              modified += "import { mount, AdditionalEditContent } from 'amalgam';\n\n";
-              modified += commentedContent;
-              return modified;
-            } else {
-              const transformedScript = transformMountCalls(scriptInfo.content, actualFilename);
-              return transformedScript;
+              return injectReactImports(scriptInfo.content);
             }
+            return scriptInfo.content;
           } else {
             console.warn(`[amalgam] No script setup found in ${actualFilename}`);
             return "export {};";
           }
         } catch (error) {
+          if (error.message.startsWith("[amalgam]")) {
+            throw error;
+          }
           console.error(`[amalgam] Error loading blade script ${filename}:`, error.message);
           return "export {};";
         }
